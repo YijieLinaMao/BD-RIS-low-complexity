@@ -1,0 +1,149 @@
+% This is a code package related to the following journal paper:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%T. Fang and Y. Mao, "A Low-Complexity Beamforming Design for Beyond-Diagonal" + ...
+%" RIS Aided Multi-User Networks," in IEEE Communications Letters, vol. 28, no. 1,
+% pp. 203-207, Jan. 2024, doi: 10.1109/LCOMM.2023.3333411.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 
+% The code is written by Tianyu Fang.
+%
+% The code is implemented in Matlab environment. Moreover, the "FC baseline 1" is
+% assisted by the Manopt toolbox.
+%
+% Fig. 2-3 of the above paper will be reproduced by running the Matlab script 'main.m'.
+% By changing the variables 'N' (the number of BD-RIS elements), 'channel_number' (channel realizations), 
+% you can reproduce Fig. 2-3.
+%
+%The quasi-Newton method would take a lot of time, so we provide the data (in the "data" document) if you want to
+%escape the boring computation.
+
+clc
+clear
+
+tolerance=1e-5; %accuracy of convergence
+
+
+L=4; %number of transmit antennas
+
+K=4; %number of users
+
+SNR=20; %transmit SNR
+
+[data_FC_proposed1,data_FC_proposed2,data_FC_baseline1,data_FC_baseline2]=deal(zeros(100,5)); 
+[data_FC_proposed1_time,data_FC_proposed2_time,data_FC_baseline1_time,...
+data_FC_baseline2_time]=deal(zeros(100,5));  
+[Without_RIS_FP,Without_RIS_FP_time,Without_RIS_RZF,Without_RIS_RZF_time]=deal(zeros(100,1));% preallocate memory to the data. 
+
+for channel_number=1 % iteration for 100 channel realizations
+
+    for N_RIS=1:2  % iteration for element number from 2^2 to 2^6
+  
+        disp([channel_number N_RIS]) %output the progress bar
+        N=2^(N_RIS+1);
+        [G,H,E]=channel(channel_number,1,K,L,N);
+        tic
+        data_FC_proposed1(channel_number,N_RIS)=Two_stage_beamforming_FP(G,H,E,tolerance,SNR);
+        data_FC_proposed1_time(channel_number,N_RIS)=toc;
+        %Using the two stage beamforming with FP algorithm
+
+        tic
+        data_FC_proposed2(channel_number,N_RIS)=Two_stage_beamforming_RZF(G,H,E,SNR);
+        data_FC_proposed2_time(channel_number,N_RIS)=toc;
+        %using the two stage beamforming with RZF algorithm
+
+        tic
+        data_FC_baseline1(channel_number,N_RIS)=Alternative_optimization_Manifold(G,H,E,tolerance,SNR); 
+        data_FC_baseline1_time(channel_number,N_RIS)=toc;
+        %using the alternative optimization beamforming with manifold method proposed in [4]
+        
+        tic
+        data_FC_baseline2(channel_number,N_RIS)=Alternative_optimization_quasi_Newton(G,H,E,tolerance,SNR);
+        %using the alternative optimization beamforming with quadi-Newton method proposed in [4]
+        data_FC_baseline2_time(channel_number,N_RIS)=toc;
+    end
+    tic
+    [~,Without_RIS_FP(channel_number)]=FP_algorithm(G,SNR,tolerance);
+    Without_RIS_FP_time(channel_number)=toc;
+
+    tic
+    Without_RIS_RZF(channel_number)=classical_RZF(G,SNR);
+    Without_RIS_RZF_time(channel_number)=toc;
+
+
+
+end
+
+
+figure
+
+T0=Without_RIS;
+T00=Without_RIS_RZF;
+T1=[T0,data_FC_baseline2];
+T2=[T0,data_FC_baseline1];
+T3=[T0,data_FC_proposed1];
+T4=[T00,ddata_FC_proposed2];
+
+
+x=[2,4,8,16,32,64];
+y1=mean(T1);
+y2=mean(T2);
+y3=mean(T3);
+y4=mean(T4);
+
+
+slg=semilogx(x,y3,'-o',x,y4,'-d',x,y2,'-*',x,y1,'-s');
+slg(1).LineWidth=1.5;
+slg(2).LineWidth=1.5;
+slg(3).LineWidth=1.5;
+slg(4).LineWidth=1.5;
+
+slg(1).Color=color(4);
+slg(2).Color=color(3);
+slg(3).Color=color(2);
+slg(4).Color=color(1);
+
+
+set(gca,'XTick',x,'XTickLabel',[0,4,8,16,32,64])
+xlabel('RIS Elements $N$','interpreter','latex')
+ylabel('$f(\mathbf\Theta)$','interpreter','latex')
+xlim([2 64])
+grid on
+set(gca,'xtick',x,'xticklabel',[0,4,8,16,32,64]);
+
+xlabel('Number of Elements')
+ylabel('Sum-Rate (bps/Hz)')
+
+legend({'FC-proposed 1','FC-proposed 2','FC-baseline 1','FC-baseline 2'},'Location','northwest')
+
+
+figure 
+T0=Without_RIS_time;
+T00=Without_RIS_RZF_time;
+T1=[T0,data_FC_baseline2_time];
+T2=[T0,data_FC_baseline1_time];
+T3=[T0,data_FC_proposed1_time];
+T4=[T00,ddata_FC_proposed2_time];
+
+x=[2,4,8,16,32,64];
+y1=mean(T1);
+y2=mean(T2);
+y3=mean(T3);
+y4=mean(T4);
+slg=loglog(x,y3,'-o',x,y4,'-d',x,y2,'-*',x,y1,'-s');
+slg(1).LineWidth=1.5;
+slg(2).LineWidth=1.5;
+slg(3).LineWidth=1.5;
+slg(4).LineWidth=1.5;
+
+slg(1).Color=color(4);
+slg(2).Color=color(3);
+slg(3).Color=color(2);
+slg(4).Color=color(1);
+
+set(gca,'XTick',x,'XTickLabel',[0,4,8,16,32,64])
+xlim([2 64])
+grid on
+
+xlabel('Number of Elements')
+ylabel('Average CPU time (sec)')
+legend({'FC-proposed 1','FC-proposed 2','FC-baseline 1','FC-baseline 2'},'Location','northwest')
